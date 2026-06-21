@@ -14,13 +14,19 @@ Autonomous pharma document pipeline: **scripts extract mechanically** → **agen
 **You do:** Run all 5 phases below. If `SOURCE` and `WORKSPACE` are clear, **proceed without asking**.
 
 ```bash
-SKILL="$(dirname "$0")/.."   # skill folder containing this SKILL.md
-bash "$SKILL/scripts/init_workspace.sh" "<WORKSPACE>"
-python3 "$SKILL/scripts/orchestrate_job.py" "<SOURCE>" "<WORKSPACE>" -r --no-gemini
+# Portable paths — works on any machine after skill is copied to ~/.agents/skills/ etc.
+SKILL_ROOT="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd || echo "$PHARMADOC_SKILL_ROOT")"
+bash "$SKILL_ROOT/scripts/setup_environment.sh"          # check deps
+# If tesseract or pip packages missing:
+bash "$SKILL_ROOT/scripts/setup_environment.sh" --install-deps
+
+export PHARMADOC_ROOT="/path/to/extraction-engine"   # required once per machine
+bash "$SKILL_ROOT/scripts/init_workspace.sh" "<WORKSPACE>"
+python3 "$SKILL_ROOT/scripts/orchestrate_job.py" "<SOURCE>" "<WORKSPACE>" -r --no-gemini
 # Then Phase 4 semantic review on each review_bundle.json
 ```
 
-Set `PHARMADOC_ROOT` to your extraction engine before Phase 2 (see [references/tooling.md](references/tooling.md)).
+Set `PHARMADOC_ROOT` to your extraction engine (see [references/tooling.md](references/tooling.md)). Scripts auto-set `PHARMADOC_SKILL_ROOT` — no hardcoded user paths.
 
 ## When to use
 
@@ -70,12 +76,16 @@ bash scripts/init_workspace.sh "<WORKSPACE>"
 python3 scripts/scan_folder.py "<SOURCE>" -r -o "<WORKSPACE>/00_manifest/inventory.json"
 ```
 
-### Phase 2 — Extract
+### Phase 2 — Extract (Tier 2 mechanical engine)
 
 ```bash
 export PHARMADOC_ROOT="/path/to/extraction-engine"
 python3 scripts/run_extract.py "<SOURCE>" "<WORKSPACE>" -r --no-gemini
 ```
+
+The engine applies **layout-aware field linking**, **confidence calibration**, **doc-type refiners**, and **OCR char fixes** before semantic review. See [references/mechanical-extraction.md](references/mechanical-extraction.md).
+
+For scans or hard cases: `PHARMADOC_USE_PADDLE=1`. Inspect `fields[].source` (`regex`, `layout`, `regex+layout`) when deciding Phase 4 focus.
 
 Retry (max 2): re-run with Gemini (omit `--no-gemini`) or `PHARMADOC_USE_PADDLE=1` for scans.
 
@@ -153,4 +163,5 @@ Rules: [references/semantic-review.md](references/semantic-review.md)
 | [references/workflow.md](references/workflow.md) | Running full batch |
 | [references/semantic-review.md](references/semantic-review.md) | Phase 4 decisions |
 | [references/quality-gates.md](references/quality-gates.md) | Pass/fail thresholds |
+| [references/mechanical-extraction.md](references/mechanical-extraction.md) | Phase 2 Tier-2 engine behavior |
 | [references/tooling.md](references/tooling.md) | Setup extraction engine |

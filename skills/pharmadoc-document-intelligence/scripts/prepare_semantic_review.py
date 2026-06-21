@@ -30,6 +30,7 @@ def _field_rows(page: dict[str, Any]) -> list[dict[str, Any]]:
                 "value": meta.get("value"),
                 "confidence": meta.get("confidence"),
                 "low_confidence": meta.get("low_confidence", False),
+                "source": meta.get("source"),
             }
         )
     return rows

@@ -1,65 +1,61 @@
 # Tooling
 
-The skill is **tool-agnostic**. Any extractor that outputs compatible JSON (see below) works.
+The skill is **portable** — all script paths resolve from the skill folder (`PHARMADOC_SKILL_ROOT`). No machine-specific paths are hardcoded.
 
-## Extraction engine
+## First-time setup (any computer)
 
-Set before Phase 2:
+```bash
+# After copying/cloning the skill folder:
+cd pharmadoc-document-intelligence
+
+# Check dependencies; install tesseract + pip deps when missing:
+bash scripts/setup_environment.sh --install-deps
+
+# Verify:
+bash scripts/check_prerequisites.sh
+```
+
+### What gets installed automatically?
+
+| Component | Auto-install with `--install-deps`? |
+|-----------|-------------------------------------|
+| **Tesseract OCR** | Yes — via `brew` (macOS) or `apt`/`dnf` (Linux) if available |
+| **Python packages** | Yes — from `$PHARMADOC_ROOT/requirements.txt` if engine is set |
+| **Extraction engine** | **No** — you must clone/copy separately and set `PHARMADOC_ROOT` |
+| **Gemini API** | **No** — optional; set `GEMINI_API_KEY` for vision retry |
+
+Tesseract is **not** installed silently on every skill run — the agent (or user) runs `setup_environment.sh --install-deps` once per machine.
+
+## Environment variables (universal)
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `PHARMADOC_SKILL_ROOT` | Auto-set by scripts | Path to this skill folder |
+| `PHARMADOC_ROOT` | Yes for Phase 2 | Path to extraction engine root (`run_agent.sh` lives here) |
+| `GEMINI_API_KEY` | No | Vision cross-validation / retry |
+| `PHARMADOC_USE_PADDLE=1` | No | Stronger OCR on scans |
 
 ```bash
 export PHARMADOC_ROOT="/path/to/your/extraction-engine"
 ```
 
-The reference implementation is **PharmaDoc AutoPipeline** (multi-engine OCR, schema fields, optional Gemini vision). Install separately and point `PHARMADOC_ROOT` at its root (directory containing `run_agent.sh`).
+The reference engine is **PharmaDoc AutoPipeline** (multi-engine OCR, Tier-2 layout fields, schema extraction). Point `PHARMADOC_ROOT` at wherever you installed it — any machine, any path.
 
-Check setup:
+## Skill scripts (paths work everywhere)
+
+Run from anywhere using `$PHARMADOC_SKILL_ROOT`:
 
 ```bash
-bash scripts/check_prerequisites.sh
+source "$PHARMADOC_SKILL_ROOT/scripts/env.sh"   # sets PHARMADOC_SKILL_ROOT
+
+python3 "$PHARMADOC_SKILL_ROOT/scripts/orchestrate_job.py" <source> <workspace> -r --no-gemini
+python3 "$PHARMADOC_SKILL_ROOT/scripts/run_extract.py" <source> <workspace> -r --no-gemini
 ```
 
-## Skill scripts (run from skill folder)
+Or `cd` into the skill folder and use `scripts/...` relative paths.
 
-| Action | Command |
-|--------|---------|
-| Init workspace | `bash scripts/init_workspace.sh <workspace>` |
-| Scan | `python3 scripts/scan_folder.py <source> -r -o <workspace>/00_manifest/inventory.json` |
-| Extract | `python3 scripts/run_extract.py <source> <workspace> -r --no-gemini` |
-| Mechanical QA | `python3 scripts/evaluate_gates.py <workspace>/02_extracted/*.json -o <workspace>/00_manifest/mechanical_qa.json` |
-| Semantic bundle | `python3 scripts/prepare_semantic_review.py ...` |
-| Apply patches | `python3 scripts/apply_semantic_patch.py ...` |
-| Mechanical phases 1–3 + bundles | `python3 scripts/orchestrate_job.py <source> <workspace> -r --no-gemini` |
+## Extraction JSON contract
 
-## Optional environment
+See [mechanical-extraction.md](mechanical-extraction.md) for Tier-2 field `source` values.
 
-| Variable | Purpose |
-|----------|---------|
-| `PHARMADOC_ROOT` | Path to extraction engine (required for Phase 2) |
-| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Vision retry + cross-validation |
-| `PHARMADOC_USE_PADDLE=1` | Stronger OCR on scans/handwriting |
-
-## Extraction JSON (minimal contract)
-
-```json
-{
-  "document_id": "uuid",
-  "filename": "coq.pdf",
-  "page_count": 1,
-  "summary": {
-    "total_fields": 7,
-    "fields_with_values": 6,
-    "low_confidence_fields": 1,
-    "accuracy_score": 0.857
-  },
-  "pages": [{
-    "page_num": 0,
-    "doc_type": "certificate_of_quality",
-    "full_text": "...",
-    "fields": {
-      "lot_number": { "value": "18356721", "confidence": 0.95, "low_confidence": false }
-    }
-  }]
-}
-```
-
-Do not hallucinate extraction results. If no engine is configured, use `scan_folder.py` for inventory and ask the user to set `PHARMADOC_ROOT`.
+Do not hallucinate extraction results. If `PHARMADOC_ROOT` is missing, complete Phase 1 (scan/inventory) and ask the user to configure the engine.

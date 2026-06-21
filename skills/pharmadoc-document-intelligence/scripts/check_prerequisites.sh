@@ -1,36 +1,49 @@
 #!/usr/bin/env bash
-# Verify extraction engine and common dependencies.
+# Verify extraction engine and common dependencies (portable paths).
 set -euo pipefail
 
-SKILL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PHARMADOC_SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "=== PharmaDoc Document Intelligence — prerequisites ==="
+echo "Skill root: $PHARMADOC_SKILL_ROOT"
 
 check() {
   local label="$1"
   local cmd="$2"
   if eval "$cmd" >/dev/null 2>&1; then
     echo "[OK]   $label"
+    return 0
   else
     echo "[MISS] $label"
+    return 1
   fi
+}
+
+MISSING=0
+check "python3" "command -v python3" || MISSING=1
+check "tesseract" "command -v tesseract" || {
+  echo "       Install: bash \"$PHARMADOC_SKILL_ROOT/scripts/setup_environment.sh\" --install-deps"
+  MISSING=1
 }
 
 if [[ -n "${PHARMADOC_ROOT:-}" && -f "${PHARMADOC_ROOT}/run_agent.sh" ]]; then
   echo "[OK]   PHARMADOC_ROOT=$PHARMADOC_ROOT"
 else
-  echo "[INFO] PHARMADOC_ROOT not set — required for mechanical extraction (see references/tooling.md)"
+  echo "[MISS] PHARMADOC_ROOT (export path to extraction engine — see references/tooling.md)"
+  MISSING=1
 fi
 
-check "python3" "command -v python3"
-check "tesseract" "command -v tesseract"
-
 if [[ -n "${GEMINI_API_KEY:-${GOOGLE_API_KEY:-}}" ]]; then
-  echo "[OK]   Gemini API key set (optional vision retry)"
+  echo "[OK]   Gemini API key set (optional)"
 else
-  echo "[INFO] No Gemini API key — offline OCR unless key is provided"
+  echo "[INFO] No Gemini API key — offline OCR mode"
 fi
 
 echo ""
-echo "Skill root: $SKILL_ROOT"
-exit 0
+if [[ "$MISSING" -eq 0 ]]; then
+  echo "All required checks passed."
+else
+  echo "Some checks failed. Run: bash scripts/setup_environment.sh --install-deps"
+fi
+exit "$MISSING"

@@ -107,6 +107,9 @@ Each run creates an auditable workspace:
 |-----------|---------|
 | Multi-engine OCR ensemble | Native PDF + Tesseract + optional PaddleOCR |
 | Spatial IoU consensus | Merge tokens across engines by bounding-box overlap |
+| **Layout-aware fields (Tier 2)** | Label→value linking on same OCR line |
+| **Confidence calibration (Tier 2)** | Per-field score from regex + layout + engines |
+| **Doc-type refiners (Tier 2)** | CoQ, packaging, BSE-specific post-extraction |
 | Schema-driven fields | CoQ, BSE/TSE, packaging spec regex + labels |
 | Adaptive preprocessing | Best image variant per page |
 | Optional Gemini vision | Cross-validate low-confidence fields |
@@ -137,12 +140,15 @@ cp -R skills/pharmadoc-document-intelligence ~/.agents/skills/
 ### Prerequisites
 
 ```bash
-brew install tesseract          # OCR fallback
+cd skills/pharmadoc-document-intelligence   # or your installed copy
+bash scripts/setup_environment.sh --install-deps   # tesseract + pip deps (first time)
 export PHARMADOC_ROOT=/path/to/your/extraction-engine
-bash skills/pharmadoc-document-intelligence/scripts/check_prerequisites.sh
+bash scripts/check_prerequisites.sh
 ```
 
 Optional: `GEMINI_API_KEY` for vision retry · `PHARMADOC_USE_PADDLE=1` for scan-heavy batches
+
+**Note:** Tesseract installs once per machine via `setup_environment.sh --install-deps` — not on every document job.
 
 ---
 
@@ -216,6 +222,15 @@ Full definitions: [`references/quality-gates.md`](skills/pharmadoc-document-inte
 - Human staff are notified only via `05_escalated/human_review_request.json`.
 
 ---
+
+## Roadmap (optional accuracy upgrades)
+
+| Tier | Status | Impact |
+|------|--------|--------|
+| **Tier 2** (layout, calibration, doc-type refiners) | **Shipped** | Better fields on structured pharma forms |
+| **Tier 1** (per-field crop re-OCR, larger eval set) | Planned | Best for **scanned** PDFs and handwriting — add later to Phase 2 |
+
+Tier 1 is **not required** for the skill to work today. It is the next engineering step when you need higher accuracy on hard scans; it plugs into the same Phase 2 workflow without changing the agent skill phases.
 
 ## License
 

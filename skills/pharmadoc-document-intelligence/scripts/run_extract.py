@@ -14,12 +14,17 @@ import sys
 from pathlib import Path
 
 
+def skill_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
 def resolve_pharmadoc_root() -> Path:
     if env := os.environ.get("PHARMADOC_ROOT"):
         return Path(env).expanduser().resolve()
     raise RuntimeError(
-        "PHARMADOC_ROOT is not set. Point it at your extraction engine checkout. "
-        "See references/tooling.md."
+        "PHARMADOC_ROOT is not set. Clone the extraction engine, then:\n"
+        "  export PHARMADOC_ROOT=/path/to/engine\n"
+        "See references/tooling.md in this skill folder."
     )
 
 
