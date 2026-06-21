@@ -1,0 +1,32 @@
+{
+  "document_id": "{{DOCUMENT_ID}}",
+  "filename": "{{FILENAME}}",
+  "review_round": 1,
+  "reviewed_at": "{{ISO_TIMESTAMP}}",
+  "reviewer": "agent_semantic",
+  "source_json": "02_extracted/{{STEM}}.json",
+  "fields_reviewed": [
+    {
+      "field": "dosage_strength",
+      "original_value": "20 microgram",
+      "decision": "revise",
+      "revised_value": "20 milligram",
+      "reason": "Oral tablet context and same-page text use mg; µg is inconsistent with product class.",
+      "evidence": "Full text contains '20 mg' in dosage line; extracted field parsed wrong unit.",
+      "confidence": 0.92
+    },
+    {
+      "field": "lot_number",
+      "original_value": "I8356721",
+      "decision": "revise",
+      "revised_value": "18356721",
+      "reason": "Leading character is OCR confusion between capital I and digit 1.",
+      "evidence": "Lot appears twice; second occurrence '18356721' without I prefix.",
+      "confidence": 0.88
+    }
+  ],
+  "document_level_decision": "revise",
+  "reextract_recommended": false,
+  "escalate_to_human": false,
+  "notes": "One pass semantic review sufficient."
+}
