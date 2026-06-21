@@ -504,17 +504,26 @@ flowchart TD
 
 ## Install & quick start
 
-> **Note:** Installation is optional. Files can stay in this repo for demo/expense; copy to agent paths when ready.
+> Clone this repository, then copy the skill into your agent skills directory.
 
 ```bash
-# Optional — install to personal agent skills
+git clone https://github.com/YOUR_USERNAME/pharmadoc-document-intelligence-skill.git
+cd pharmadoc-document-intelligence-skill
+
+# Personal agent skills (Codex, etc.)
 mkdir -p ~/.agents/skills
 cp -R skills/pharmadoc-document-intelligence ~/.agents/skills/
 
-# Optional — Cursor project scope
+# Cursor project scope
 mkdir -p .cursor/skills
 cp -R skills/pharmadoc-document-intelligence .cursor/skills/
+
+# Claude Code
+mkdir -p ~/.claude/skills
+cp -R skills/pharmadoc-document-intelligence ~/.claude/skills/
 ```
+
+> **Note:** Installation is optional during local development. Copy the skill folder when you are ready to use it with an agent.
 
 ### Prerequisites
 
