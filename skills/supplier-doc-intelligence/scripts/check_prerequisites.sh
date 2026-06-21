@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SUPPLIER_DOC_SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+export PHARMADOC_SKILL_ROOT="${PHARMADOC_SKILL_ROOT:-$SUPPLIER_DOC_SKILL_ROOT}"
 
 echo "=== Supplier Doc Intelligence — prerequisites ==="
 echo "Skill root: $SUPPLIER_DOC_SKILL_ROOT"

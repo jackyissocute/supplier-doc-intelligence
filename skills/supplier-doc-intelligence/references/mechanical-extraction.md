@@ -93,7 +93,7 @@ Tier 1 runs **automatically** when `PHARMADOC_TIER1=1` (default). Disable with `
 ## Commands
 
 ```bash
-export PHARMADOC_ROOT=/path/to/PharmaDoc_AutoPipeline
+export SUPPLIER_DOC_ENGINE_ROOT=/path/to/extraction-engine
 
 # Default (Tier 1 on, no Gemini)
 python3 scripts/run_extract.py <source> <workspace> -r --no-gemini
@@ -108,7 +108,7 @@ python3 scripts/run_tier1_eval.py -o /tmp/tier1-report.json
 ## Environment
 
 ```bash
-export PHARMADOC_ROOT=/path/to/PharmaDoc_AutoPipeline
-export PHARMADOC_TIER1=1          # default — per-field crop re-OCR
-export PHARMADOC_USE_PADDLE=1     # recommended for scans / hard-cases
+export SUPPLIER_DOC_ENGINE_ROOT=/path/to/extraction-engine
+export PHARMADOC_TIER1=1          # default — per-field crop re-OCR (engine env)
+export PHARMADOC_USE_PADDLE=1     # recommended for scans / hard-cases (engine env)
 ```

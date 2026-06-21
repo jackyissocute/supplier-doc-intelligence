@@ -2,7 +2,7 @@
 """
 Mechanical phases: init → scan → extract → mechanical QA → prepare semantic bundles.
 
-Agent must complete semantic review (SKILL.md Step 5+) before final validation.
+Agent must complete semantic review (SKILL.md Phase 4) before final validation.
 """
 
 from __future__ import annotations
@@ -106,7 +106,7 @@ def main() -> int:
         "mechanical_qa": str(qa_path),
         "semantic_review_pending": True,
         "review_bundles": bundles,
-        "next_step": "Agent: complete SKILL.md Step 5 (semantic review) for each bundle",
+        "next_step": "Agent: complete SKILL.md Phase 4 (semantic review) for each bundle",
     }
     pending_path = workspace / "00_manifest" / "semantic_review_pending.json"
     pending_path.write_text(json.dumps(pending, indent=2), encoding="utf-8")

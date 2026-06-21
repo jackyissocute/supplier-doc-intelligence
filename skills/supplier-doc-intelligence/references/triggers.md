@@ -9,6 +9,7 @@ Agents load only `name` + `description` first. This file expands trigger logic w
 **Nouns:** PDF, image, scan, SDF, CoQ, certificate of quality, BSE/TSE, packaging spec, lot number, batch number, expiry, expiration, sterilization, supplier documentation, pharma batch
 
 **Phrases:**
+- “Use supplier-doc-intelligence to …”
 - “Document these PDFs/images”
 - “AI documenting” / “digitize incoming folder”
 - “Extract lot numbers and expiry dates”

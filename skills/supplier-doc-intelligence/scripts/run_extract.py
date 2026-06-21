@@ -2,7 +2,7 @@
 """
 Run extraction engine and write JSON into workspace/02_extracted/.
 
-Requires PHARMADOC_ROOT or SUPPLIER_DOC_ENGINE_ROOT pointing at the extraction engine.
+Requires SUPPLIER_DOC_ENGINE_ROOT (or legacy PHARMADOC_ROOT) pointing at the extraction engine.
 """
 
 from __future__ import annotations

@@ -5,8 +5,11 @@ The skill is **portable** — all script paths resolve from the skill folder (`S
 ## First-time setup (any computer)
 
 ```bash
-# After copying/cloning the skill folder:
-cd supplier-doc-intelligence
+# After cloning the GitHub repo:
+cd supplier-doc-intelligence/skills/supplier-doc-intelligence
+
+# Or after copying into agent skills dir:
+cd ~/.agents/skills/supplier-doc-intelligence
 
 # Check dependencies; install tesseract + pip deps when missing:
 bash scripts/setup_environment.sh --install-deps

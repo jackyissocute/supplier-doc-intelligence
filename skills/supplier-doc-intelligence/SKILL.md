@@ -1,6 +1,6 @@
 ---
 name: supplier-doc-intelligence
-description: Document, digitize, or extract healthcare and pharmaceutical PDFs and images — SDF, certificates of quality (CoQ), BSE/TSE, packaging specs, lot numbers, expiry dates, sterilization fields, handwriting, mixed fonts. Use for batch folder processing, AI documenting workflows, OCR extraction, mechanical QA, agent semantic review with common-sense correction, and structured JSON output. Human staff only as last resort. Do not use for clinical diagnosis, medical advice, or generic PDF editing without extraction.
+description: Supplier document intelligence (supplier-doc-intelligence skill). Document, digitize, or extract healthcare and pharmaceutical PDFs and images — SDF, certificates of quality (CoQ), BSE/TSE, packaging specs, lot numbers, expiry dates, sterilization fields, handwriting, mixed fonts. Use for batch folder processing, AI documenting workflows, OCR extraction, mechanical QA, agent semantic review with common-sense correction, and structured JSON output. Human staff only as last resort. Do not use for clinical diagnosis, medical advice, or generic PDF editing without extraction.
 ---
 
 # Supplier Doc Intelligence
@@ -14,8 +14,13 @@ Autonomous pharma document pipeline: **scripts extract mechanically** → **agen
 **You do:** Run all 5 phases below. If `SOURCE` and `WORKSPACE` are clear, **proceed without asking**.
 
 ```bash
-# Portable paths — works on any machine after skill is copied to ~/.agents/skills/ etc.
-SKILL_ROOT="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd || echo "$SUPPLIER_DOC_SKILL_ROOT")"
+# Resolve skill root on any machine (installed copy or repo checkout):
+SKILL_ROOT="${SUPPLIER_DOC_SKILL_ROOT:-}"
+if [[ -z "$SKILL_ROOT" && -n "${BASH_SOURCE[0]:-}" ]]; then
+  SKILL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+# Or: source "<skill-folder>/scripts/env.sh"
+
 bash "$SKILL_ROOT/scripts/setup_environment.sh"          # check deps
 # If tesseract or pip packages missing:
 bash "$SKILL_ROOT/scripts/setup_environment.sh" --install-deps
@@ -25,6 +30,8 @@ bash "$SKILL_ROOT/scripts/init_workspace.sh" "<WORKSPACE>"
 python3 "$SKILL_ROOT/scripts/orchestrate_job.py" "<SOURCE>" "<WORKSPACE>" -r --no-gemini
 # Then Phase 4 semantic review on each review_bundle.json
 ```
+
+All phase commands below assume `SKILL_ROOT` is set (or run from the installed skill folder). Prefer absolute paths: `"$SKILL_ROOT/scripts/..."`.
 
 Set `SUPPLIER_DOC_ENGINE_ROOT` to your extraction engine (see [references/tooling.md](references/tooling.md)). Scripts auto-set `SUPPLIER_DOC_SKILL_ROOT` — no hardcoded user paths.
 
@@ -72,8 +79,8 @@ Full checklist: [references/workflow.md](references/workflow.md)
 ### Phase 1 — Ingest
 
 ```bash
-bash scripts/init_workspace.sh "<WORKSPACE>"
-python3 scripts/scan_folder.py "<SOURCE>" -r -o "<WORKSPACE>/00_manifest/inventory.json"
+bash "$SKILL_ROOT/scripts/init_workspace.sh" "<WORKSPACE>"
+python3 "$SKILL_ROOT/scripts/scan_folder.py" "<SOURCE>" -r -o "<WORKSPACE>/00_manifest/inventory.json"
 ```
 
 ### Phase 2 — Extract (Tier 1 + Tier 2 mechanical engine)
@@ -82,10 +89,10 @@ python3 scripts/scan_folder.py "<SOURCE>" -r -o "<WORKSPACE>/00_manifest/invento
 export SUPPLIER_DOC_ENGINE_ROOT="/path/to/extraction-engine"
 
 # Default — Tier 1 crop re-OCR enabled (best for mixed batches)
-python3 scripts/run_extract.py "<SOURCE>" "<WORKSPACE>" -r --no-gemini
+python3 "$SKILL_ROOT/scripts/run_extract.py" "<SOURCE>" "<WORKSPACE>" -r --no-gemini
 
 # Scan / handwriting heavy folder
-python3 scripts/run_extract.py "<SOURCE>" "<WORKSPACE>" -r --scan-mode --no-gemini
+python3 "$SKILL_ROOT/scripts/run_extract.py" "<SOURCE>" "<WORKSPACE>" -r --scan-mode --no-gemini
 ```
 
 **Phase 2 stack:** multi-engine OCR → layout fields (Tier 2) → **per-field crop re-OCR on scans** (Tier 1) → optional Gemini retry.
@@ -100,19 +107,19 @@ See [references/mechanical-extraction.md](references/mechanical-extraction.md) f
 
 **Retries (max 2):** `--scan-mode` → omit `--no-gemini` → re-run only failed docs.
 
-**Hard-case eval:** `python3 scripts/run_tier1_eval.py -o /tmp/tier1-report.json` (requires `SUPPLIER_DOC_ENGINE_ROOT`).
+**Hard-case eval:** `python3 "$SKILL_ROOT/scripts/run_tier1_eval.py" -o /tmp/tier1-report.json` (requires `SUPPLIER_DOC_ENGINE_ROOT`).
 
 ### Phase 3 — Mechanical QA
 
 ```bash
-python3 scripts/evaluate_gates.py <WORKSPACE>/02_extracted/*.json \
+python3 "$SKILL_ROOT/scripts/evaluate_gates.py" <WORKSPACE>/02_extracted/*.json \
   -o <WORKSPACE>/00_manifest/mechanical_qa.json
 ```
 
 ### Phase 4 — Semantic review (required for full-batch)
 
 ```bash
-python3 scripts/prepare_semantic_review.py \
+python3 "$SKILL_ROOT/scripts/prepare_semantic_review.py" \
   "<WORKSPACE>/02_extracted/<stem>.json" \
   -o "<WORKSPACE>/03_semantic_review/<stem>/review_bundle.json"
 ```
@@ -120,7 +127,7 @@ python3 scripts/prepare_semantic_review.py \
 Read bundle → write `review.json` → apply patches:
 
 ```bash
-python3 scripts/apply_semantic_patch.py \
+python3 "$SKILL_ROOT/scripts/apply_semantic_patch.py" \
   "<WORKSPACE>/03_semantic_review/<stem>/review.json" \
   "<WORKSPACE>/02_extracted/<stem>.json" \
   -o "<WORKSPACE>/03_semantic_review/<stem>/revised.json"
