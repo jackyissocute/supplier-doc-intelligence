@@ -17,13 +17,9 @@ from pathlib import Path
 def resolve_pharmadoc_root() -> Path:
     if env := os.environ.get("PHARMADOC_ROOT"):
         return Path(env).expanduser().resolve()
-    skill_root = Path(__file__).resolve().parents[1]
-    candidate = skill_root.parents[2] / "09_Final_Integration_Testing_Evaluation" / "PharmaDoc_AutoPipeline"
-    if candidate.is_dir():
-        return candidate.resolve()
     raise RuntimeError(
-        "PHARMADOC_ROOT not set and default PharmaDoc_AutoPipeline not found. "
-        "Export PHARMADOC_ROOT=/path/to/PharmaDoc_AutoPipeline"
+        "PHARMADOC_ROOT is not set. Point it at your extraction engine checkout. "
+        "See references/tooling.md."
     )
 
 

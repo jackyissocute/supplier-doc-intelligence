@@ -1,45 +1,31 @@
 # Example prompts
 
-## Staff user → agent
+## Full batch (default mode)
 
-> "I'm on the AI documenting team. Please document all PDFs and scans in `~/Desktop/new_sdf_batch` into our workspace at `~/Desktop/pfizer_doc_runs/2025-06-21`."
+> Document all PDFs and scans in `~/incoming/sdf-june` into `~/doc-runs/sdf-june-21`. Fix obvious OCR mistakes; only ask me if something is truly ambiguous.
 
-**Agent should:** activate skill → init → scan → extract → mechanical QA → **semantic review** → validated/escalated → report + self-assessment.
+**Expected:** Phases 1–5, autonomous output in `04_validated/`, alarms in `05_escalated/` only if needed.
 
----
+## Extract only
 
-> "Process these pharmaceutical certificates and tell me the lot numbers and expiry dates."
+> Extract structured fields from the certificates in `./incoming` — lot numbers, expiry, product names.
 
-**Agent should:** full workflow; answer from `04_validated/*.json` only.
+**Expected:** Phases 1–3, JSON in `02_extracted/`.
 
----
+## Semantic pass on existing workspace
 
-> "Some pages have handwriting and mixed fonts — extract first, then use your judgment to fix obvious mistakes like wrong dose units. Only bother me if you're truly unsure."
+> Review the extractions in `~/doc-runs/batch-3/02_extracted` — the dose units look wrong.
 
-**Agent should:** round 1 extract (errors OK) → read `review_bundle.json` → write `review.json` → apply patches with evidence → escalate only blocking ambiguities.
+**Expected:** Phase 4 semantic review, audited patches, updated validated output.
 
----
+## Explicit invocation
 
-> "Quality check the images in `/data/incoming/scans` — escalate only what you cannot fix autonomously."
-
-**Agent should:** mechanical QA + semantic review; `05_escalated/` with `human_review_request.json` for remainder.
-
----
-
-## Explicit skill invocation
-
-Codex / Copilot:
 ```
-Use the pharmadoc-document-intelligence skill to document ~/Desktop/new_sdf_batch
+Use pharmadoc-document-intelligence to document ~/incoming/pharma-batch-7
 ```
 
-Cursor:
-```
-@pharmadoc-document-intelligence process the folder ~/Documents/pharma_inbox
-```
+## Out of scope (skill should NOT activate)
 
-## What NOT to trigger on
-
-- "Explain what OCR is" (general question — no skill)
-- "Write a cover letter for Pfizer" (not document extraction)
-- "Diagnose this patient from lab results" (clinical — out of scope)
+- “What is OCR?”
+- “Diagnose this patient from lab PDF”
+- “Merge these PDFs into one file”

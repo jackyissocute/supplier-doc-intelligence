@@ -1,590 +1,222 @@
-# PharmaDoc Document Intelligence — Agent Skill
+# PharmaDoc Document Intelligence
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Agent Skills](https://img.shields.io/badge/Agent-Skills-green.svg)](https://github.com/agentskills/agentskills)
 
-Open-source **Agent Skill** for autonomous healthcare/pharmaceutical document extraction — compatible with **Codex**, **Cursor**, **GitHub Copilot**, **Claude Code**, and other agents that load `SKILL.md` folders.
+Open-source [Agent Skill](https://github.com/agentskills/agentskills) for **autonomous pharmaceutical document extraction** — batch PDFs and images → structured JSON, with agent semantic review and human escalation only as a last resort.
 
-Portable [Agent Skills](https://github.com/openai/skills) package: scan PDFs/images → multi-engine OCR → **agent semantic review** → validated JSON output with human alarm only as last resort.
+Works with **Codex**, **Cursor**, **GitHub Copilot**, **Claude Code**, and other agents that load `SKILL.md`.
 
-This README is the **architecture and workflow reference** — diagrams, techniques, and design rationale. Agents follow operational steps in [`skills/pharmadoc-document-intelligence/SKILL.md`](skills/pharmadoc-document-intelligence/SKILL.md).
-
----
-
-## Table of contents
-
-1. [Design philosophy](#design-philosophy)
-2. [End-to-end workflow](#end-to-end-workflow)
-3. [Three-layer intelligence model](#three-layer-intelligence-model)
-4. [Workspace folder lifecycle](#workspace-folder-lifecycle)
-5. [Techniques employed](#techniques-employed)
-6. [Reference engine (PharmaDoc AutoPipeline)](#reference-engine-pharmadoc-autopipeline)
-7. [Frontier & research alignment](#frontier--research-alignment)
-8. [Quality gates](#quality-gates)
-9. [Scripts & artifacts](#scripts--artifacts)
-10. [Install & quick start](#install--quick-start)
+**Repository:** [github.com/jackyissocute/pharmadoc-document-intelligence-skill](https://github.com/jackyissocute/pharmadoc-document-intelligence-skill)
 
 ---
 
-## Design philosophy
+## What it does
 
-Traditional document AI often fails in one of two ways:
+Staff drop incoming supplier documents (CoQ, SDF, BSE/TSE, packaging specs, scans) into a folder. An agent loads this skill and runs a **5-phase pipeline**:
 
-| Approach | Problem |
-|----------|---------|
-| **Chat-only RAG** | Retrieves text but does not guarantee structured, auditable field extraction |
-| **Human-in-the-loop workbench** | Accurate but does not scale for incoming supplier PDF/image batches |
+1. **Ingest** — scan files, create workspace  
+2. **Extract** — multi-engine OCR + schema fields  
+3. **Mechanical QA** — fill-rate and confidence gates  
+4. **Semantic review** — agent reads context, fixes obvious errors (e.g. µg vs mg, lot `I` vs `1`)  
+5. **Deliver** — validated JSON + report; human alarm only for true ambiguity  
 
-This skill implements a **third path**:
-
-```
-Deterministic extraction (Python/OCR)  +  Agent semantic reasoning (LLM)  +  Human alarm (last resort)
-```
-
-- **Round 1 accepts OCR noise** — handwriting, mixed fonts, and scan artifacts are expected.
-- **The agent reads like a staff reviewer** — common-sense checks (dose units, lot-number character confusion, date logic).
-- **Every revision is audited** — `review.json`, evidence quotes, confidence scores.
-- **Staff are pinged only for true ambiguity** — not for routine box correction.
+**Design goal:** fully autonomous documenting — not a human-in-the-loop workbench.
 
 ---
 
-## End-to-end workflow
+## Workflow at a glance
 
-### High-level pipeline
-
-```mermaid
-flowchart TB
-    subgraph INPUT["📥 Input"]
-        SRC[Staff source folder<br/>PDF · PNG · JPG · TIFF · WebP]
-    end
-
-    subgraph PHASE1["Phase 1 — Mechanical (Python / OCR)"]
-        DISC[scan_folder.py<br/>File inventory]
-        EXT[run_extract.py<br/>Multi-engine extraction]
-        MP[Adaptive preprocessing]
-        OCR[OCR ensemble]
-        CON[Spatial IoU consensus]
-        CLS[Doc-type classification]
-        FLD[Schema-driven field extraction]
-        DISC --> EXT
-        EXT --> MP --> OCR --> CON --> CLS --> FLD
-        RAW[02_extracted/*.json]
-        FLD --> RAW
-        MQA[evaluate_gates.py<br/>Mechanical QA]
-        RAW --> MQA
-        RET{Mechanical<br/>pass?}
-        MQA --> RET
-        RET -->|no| RTRY[Retry: Gemini vision · PaddleOCR · preprocess variants]
-        RTRY --> EXT
-        RET -->|yes or max retries| SEMIN
-    end
-
-    subgraph PHASE2["Phase 2 — Semantic (Agent LLM)"]
-        SEMIN[prepare_semantic_review.py]
-        BUNDLE[review_bundle.json<br/>full_text + low-confidence fields]
-        AGENT[Agent reads context<br/>common-sense review]
-        REV[review.json<br/>accept · revise · reextract · escalate]
-        PATCH[apply_semantic_patch.py<br/>audited revisions]
-        RAW --> SEMIN --> BUNDLE --> AGENT --> REV
-        REV -->|revise| PATCH
-        REV -->|reextract| RTRY
-        PATCH --> REVISED[revised.json]
-    end
-
-    subgraph PHASE3["Phase 3 — Output"]
-        SORT{Final<br/>decision}
-        REV --> SORT
-        PATCH --> SORT
-        SORT -->|autonomous| VAL[04_validated/]
-        SORT -->|alarm| ESC[05_escalated/<br/>human_review_request.json]
-        VAL --> EXP[06_exports/]
-        VAL --> RPT[07_reports/<br/>job-summary · self-assessment]
-        REFL[logs/reflection.jsonl]
-        AGENT --> REFL
-    end
-
-    SRC --> DISC
-    ESC --> STAFF[👤 Staff answers<br/>specific fields only]
-    STAFF -.->|optional re-run| EXT
-
-    style PHASE1 fill:#e8f4fd
-    style PHASE2 fill:#fef3e8
-    style PHASE3 fill:#e8fde8
-```
-
-### Sequence view (one document)
-
-```mermaid
-sequenceDiagram
-    participant Staff
-    participant Agent as Agent (LLM)
-    participant Scripts as Skill Scripts
-    participant Pipeline as PharmaDoc Pipeline
-    participant OCR as OCR Engines
-
-    Staff->>Agent: "Document PDFs in ~/incoming/batch-42"
-    Agent->>Scripts: init_workspace.sh
-    Agent->>Scripts: scan_folder.py
-    Scripts-->>Agent: inventory.json
-
-    loop Mechanical rounds (max 3)
-        Agent->>Scripts: run_extract.py
-        Scripts->>Pipeline: process_batch()
-        Pipeline->>OCR: Native PDF + Tesseract + Paddle*
-        OCR-->>Pipeline: tokens + bboxes
-        Pipeline-->>Scripts: 02_extracted/doc.json
-        Agent->>Scripts: evaluate_gates.py
-    end
-
-    Agent->>Scripts: prepare_semantic_review.py
-    Scripts-->>Agent: review_bundle.json
-
-    Note over Agent: Read full_text + fields<br/>Apply pharma common sense
-
-    Agent->>Agent: Write review.json
-    alt Clear error with evidence
-        Agent->>Scripts: apply_semantic_patch.py
-        Scripts-->>Agent: revised.json + audit trail
-    else OCR illegible
-        Agent->>Scripts: run_extract.py (paddle/gemini)
-    else Ambiguous / low confidence
-        Agent->>Staff: human_review_request.json (alarm)
-    end
-
-    Agent->>Scripts: Sort → validated / escalated
-    Agent->>Staff: Summary + self-assessment
-```
-
-### Round-based error tolerance
+### Five phases (linear pipeline)
 
 ```
-Round 1 (Extract)     ──►  Errors EXPECTED (handwriting, fonts, OCR noise)
-         │
-Round 2 (OCR retry)   ──►  Gemini vision · PaddleOCR · preprocess variants
-         │
-Round 3 (Semantic)    ──►  Agent context review · unit/date/lot logic
-         │
-Round 4 (Re-extract)  ──►  Agent-triggered if visual issue persists (max 2)
-         │
-Final                 ──►  Validated OR human alarm (not full manual QA)
+  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+  │  1 INGEST   │───▶│  2 EXTRACT  │───▶│ 3 MECH QA   │───▶│ 4 SEMANTIC  │───▶│  5 DELIVER  │
+  │   scripts   │    │ OCR engine  │    │   scripts   │    │    agent    │    │ agent+files │
+  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+        │                  │                  │                  │                  │
+   inventory.json    02_extracted/     mechanical_qa.json   review.json      04_validated/
+                                                                               05_escalated/
+                                                                               07_reports/
 ```
 
----
-
-## Three-layer intelligence model
-
-```mermaid
-graph LR
-    subgraph L1["Layer 1 — Deterministic"]
-        A1[Multi-engine OCR]
-        A2[IoU consensus fusion]
-        A3[Regex + schema fields]
-        A4[Mechanical QA gates]
-    end
-
-    subgraph L2["Layer 2 — Agent cognitive"]
-        B1[Full-text context reading]
-        B2[Cross-field consistency]
-        B3[Pharma common-sense rules]
-        B4[Audited semantic patches]
-        B5[Self-reflection log]
-    end
-
-    subgraph L3["Layer 3 — Human"]
-        C1[Targeted field confirmation]
-        C2[Handwriting authority judgment]
-    end
-
-    L1 --> L2
-    L2 -->|confidence ≥ 0.85| OUT[Autonomous output]
-    L2 -->|confidence < 0.85| L3
-    L3 --> OUT
-
-    style L1 fill:#dbeafe
-    style L2 fill:#fed7aa
-    style L3 fill:#fecaca
-```
-
-| Layer | Runs on | Strength | Weakness addressed by next layer |
-|-------|---------|----------|----------------------------------|
-| **Mechanical** | CPU/GPU scripts | Repeatable, fast, auditable JSON | OCR blind to meaning (µg vs mg) |
-| **Semantic** | Agent LLM | Context, domain logic, handwriting interpretation | Needs evidence discipline |
-| **Human** | Staff | Authoritative judgment on ambiguity | Does not scale — used sparingly |
-
----
-
-## Workspace folder lifecycle
-
-Each job creates a **staged workspace** — every step leaves artifacts for audit, expense reporting, and demo.
-
-```
-<workspace>/
-│
-├── 00_manifest/
-│   ├── inventory.json              ← scanned file list
-│   ├── mechanical_qa.json          ← fill rate, low-confidence counts
-│   ├── semantic_qa.json            ← post-review gate results
-│   └── semantic_review_pending.json← orchestrator handoff to agent
-│
-├── 01_ingest/                      ← optional source copies
-│
-├── 02_extracted/                   ← RAW mechanical JSON (round 1+)
-│   └── coq-scan.json
-│
-├── 03_semantic_review/             ← AGENT cognitive layer
-│   └── coq-scan/
-│       ├── review_bundle.json      ← compact context for LLM
-│       ├── review.json             ← agent decisions + evidence
-│       └── revised.json            ← patched output + audit
-│
-├── 04_validated/                   ← autonomous pass
-├── 05_escalated/                   ← human alarm only
-│   └── coq-scan/
-│       ├── coq-scan.json
-│       ├── escalation.json
-│       └── human_review_request.json
-│
-├── 06_exports/                     ← downstream JSON/CSV
-├── 07_reports/
-│   ├── job-summary.md
-│   └── self-assessment.md          ← accuracy reflection
-│
-└── logs/
-    ├── agent.log                   ← step-by-step actions
-    └── reflection.jsonl            ← agent self-monitoring
-```
-
-```mermaid
-stateDiagram-v2
-    [*] --> Initialized: init_workspace.sh
-    Initialized --> Inventoried: scan_folder.py
-    Inventoried --> Extracted: run_extract.py
-    Extracted --> MechQA: evaluate_gates.py
-    MechQA --> Extracted: OCR retry
-    MechQA --> SemanticReview: prepare_semantic_review.py
-    SemanticReview --> Revised: apply_semantic_patch.py
-    SemanticReview --> Extracted: reextract
-    SemanticReview --> Escalated: escalate_to_human
-    Revised --> Validated: final pass
-    Validated --> Exported: 06_exports
-    Validated --> Reported: 07_reports
-    Escalated --> Reported
-    Reported --> [*]
-```
-
----
-
-## Techniques employed
-
-### Skill orchestration layer
-
-| Technique | Description | Where |
-|-----------|-------------|-------|
-| **Agent Skills spec** | Portable `SKILL.md` + scripts + references; trigger via description keywords | This repo |
-| **Folder-staged pipeline** | Immutable stage folders mimic GxP-friendly document flow | `init_workspace.sh` |
-| **Orchestrator / worker split** | Agent decides; scripts execute deterministically | `SKILL.md` workflow |
-| **Semantic review protocol** | accept · revise · reextract · escalate per field | `references/semantic-review.md` |
-| **Audited semantic patches** | Every LLM correction requires evidence + confidence ≥ 0.85 | `apply_semantic_patch.py` |
-| **Human-in-the-loop alarm** | Staff engaged only for blocking ambiguity | `human_review_request.json` |
-| **Agent self-reflection** | Post-job accuracy assessment in `reflection.jsonl` | `assets/self-assessment-template.md` |
-
-### Mechanical extraction layer (PharmaDoc reference engine)
-
-| Technique | Description | Module |
-|-----------|-------------|--------|
-| **Multi-engine OCR ensemble** | Native PDF text + Tesseract + optional PaddleOCR | `pipeline/ocr_ensemble.py` |
-| **Adaptive preprocessing** | Auto-selects best image variant per page (contrast, deskew, DPI) | `pipeline/preprocess.py` |
-| **Spatial IoU consensus fusion** | Clusters tokens by bounding-box overlap; majority vote across engines | `pipeline/consensus.py` |
-| **Disputed region tracking** | Flags tokens where engines disagree for retry/vision | `pipeline/consensus.py` |
-| **Hybrid doc-type classification** | Keyword rules + optional Gemini fallback | `pipeline/classifier.py` |
-| **Schema-driven field extraction** | JSON schemas per doc type (CoQ, BSE/TSE, packaging spec) with regex + labels | `schemas/field_schemas.json`, `pipeline/field_extractor.py` |
-| **Domain post-processing** | Pharma-specific normalization (COMMON_FIXES, date formats) | `pipeline/domain_postprocess.py` |
-| **Gemini vision cross-validation** | Multimodal re-read of low-confidence fields + auto-retry | `pipeline/cross_validator.py` |
-| **SQLite document queue** | Batch state, result paths, accuracy scores | `pipeline/queue_store.py` |
-| **TF-IDF + FAISS corpus index** | Semantic search over processed docs (`ask` command) | `pipeline/indexer.py` |
-| **Mechanical quality gates** | Fill rate, low-confidence cap, text presence thresholds | `evaluate_gates.py` |
-
-### Semantic review examples (agent layer)
-
-| OCR output | Agent reasoning | Decision |
-|------------|-----------------|----------|
-| `20 microgram` on oral tablet label | Same page shows `mg`; product class inconsistent with µg | **revise** → `20 milligram` |
-| Lot `I8356721` | Second occurrence in full_text is `18356721` (I vs 1) | **revise** with evidence |
-| Expiry before manufacture | Date field swap or partial OCR | **revise** or **reextract** |
-| Illegible handwritten dose override | Text not recoverable from full_text | **reextract** with Paddle → else **escalate** |
-
----
-
-## Reference engine (PharmaDoc AutoPipeline)
-
-The skill is **tool-agnostic** — any extractor producing compatible JSON works. The Pfizer Project 9 reference implementation lives at:
-
-```
-09_Final_Integration_Testing_Evaluation/PharmaDoc_AutoPipeline/
-```
+### Who does what
 
 ```mermaid
 flowchart LR
-    subgraph INGEST
-        PDF[PDF native text]
-        IMG[Image scans]
-    end
-
-    subgraph PREPROCESS
-        ADP[Adaptive variants<br/>contrast · deskew · DPI]
-    end
-
-    subgraph ENSEMBLE["OCR Ensemble"]
-        TESS[Tesseract LSTM]
-        PAD[PaddleOCR*]
-        NAT[Native PDF layer]
-    end
-
-    subgraph FUSE
-        IOU[IoU token clustering]
-        VOTE[Majority vote + confidence]
-    end
-
-    subgraph UNDERSTAND
-        CLASS[Doc-type classifier]
-        EXTR[Schema field extractor]
-        POST[Domain post-process]
-    end
-
-    subgraph VALIDATE
-        GEM[Gemini vision cross-val*]
-        RETRY[Auto-retry on dispute]
-    end
-
-    PDF --> NAT
-    IMG --> ADP --> TESS
-    ADP --> PAD
-    NAT --> IOU
-    TESS --> IOU
-    PAD --> IOU
-    IOU --> VOTE --> CLASS --> EXTR --> POST --> GEM
-    GEM --> RETRY
-    RETRY --> JSON[(Structured JSON)]
-
-    style ENSEMBLE fill:#e0e7ff
-    style VALIDATE fill:#fce7f3
+    A[Staff folder<br/>PDFs & images] --> B[Phase 1-3<br/>Python scripts]
+    B --> C[Phase 4<br/>Agent LLM]
+    C --> D{Confident?}
+    D -->|Yes| E[Validated JSON]
+    D -->|No| F[Human alarm<br/>specific fields only]
+    E --> G[Reports & exports]
+    F --> G
 ```
 
-\* PaddleOCR and Gemini optional — enabled via `PHARMADOC_USE_PADDLE=1` and API keys.
+| Phase | Runs on | Accepts errors in round 1? |
+|-------|---------|----------------------------|
+| 1–3 Mechanical | Python / OCR scripts | **Yes** — handwriting & OCR noise expected |
+| 4 Semantic | Agent (LLM) | Fixes with evidence from document text |
+| 5 Deliver | Agent + scripts | Escalates only blocking ambiguity |
 
-### Extraction JSON contract
+### Internal modes (one skill, not four installs)
 
-```json
-{
-  "document_id": "uuid",
-  "filename": "coq-scan.pdf",
-  "page_count": 2,
-  "summary": {
-    "total_fields": 7,
-    "fields_with_values": 6,
-    "low_confidence_fields": 1,
-    "accuracy_score": 0.857
-  },
-  "pages": [{
-    "page_num": 0,
-    "doc_type": "certificate_of_quality",
-    "full_text": "...",
-    "fields": {
-      "lot_number": {
-        "value": "18356721",
-        "confidence": 0.95,
-        "low_confidence": false
-      }
-    }
-  }],
-  "semantic_review_audit": { "...": "added by apply_semantic_patch.py" }
-}
-```
+| Mode | Typical user request |
+|------|---------------------|
+| **full-batch** | “Document this folder” |
+| **extract-only** | “Extract fields from these PDFs” |
+| **semantic-pass** | “Review extractions / fix OCR mistakes” |
+| **report-only** | “Summarize what passed vs failed” |
+
+The agent picks the mode from intent. Details in [`SKILL.md`](skills/pharmadoc-document-intelligence/SKILL.md).
 
 ---
 
-## Frontier & research alignment
+## Workspace output (every job)
 
-This skill sits at the intersection of **classical OCR pipelines**, **multimodal LLM validation**, and **agent-orchestrated document intelligence** — areas active in 2024–2026 research (see also Project 9 Perplexity report on Donut, TrOCR, LayoutLMv3).
+Each run creates an auditable workspace:
 
-| Frontier method | What it does | Relationship to this skill |
-|-----------------|--------------|----------------------------|
-| **TrOCR** (ViT + seq2seq) | End-to-end handwritten text | PaddleOCR + semantic agent partially bridge handwriting gap; TrOCR fine-tune is a future engine slot |
-| **Donut / Slim-Donut** | OCR-free image → JSON | Aligns with our goal: structured output without manual correction; schema extraction is the current hybrid step toward this |
-| **LayoutLMv3** | Text + 2D layout + vision fusion | IoU consensus + bboxes approximate layout-aware fusion; full LayoutLM is a roadmap upgrade |
-| **Gemini / GPT-4V vision** | Multimodal field verification | Implemented in `cross_validator.py`; skill uses as mechanical retry strategy |
-| **Agent Skills (OpenAI / Copilot)** | Portable workflow instructions | This repo — orchestration layer above extraction |
-| **Human-in-the-loop alarms** | Targeted escalation vs full review | Semantic review + `human_review_request.json` — minimal HITL |
-
-### Innovation summary
-
-What makes this skill **non-generic**:
-
-1. **Hybrid cognitive pipeline** — scripts for precision, LLM for meaning (not chat-only RAG).
-2. **Errors tolerated early, corrected late** — matches real pharma scan batches.
-3. **Evidence-bound semantic patches** — LLM corrections are auditable (GxP-friendly direction).
-4. **Self-monitoring agent** — `reflection.jsonl` tracks whether semantic pass improved accuracy.
-5. **Agent-agnostic portability** — one skill folder works across Codex, Cursor, Claude Code, etc.
+| Folder | Contents |
+|--------|----------|
+| `00_manifest/` | File inventory, mechanical QA, job metadata |
+| `02_extracted/` | Raw OCR JSON (round 1 may include errors) |
+| `03_semantic_review/` | Agent review bundles, `review.json`, `revised.json` |
+| `04_validated/` | Documents that passed autonomously |
+| `05_escalated/` | Human alarm — `human_review_request.json` |
+| `06_exports/` | Final JSON for downstream systems |
+| `07_reports/` | Job summary + agent self-assessment |
+| `logs/` | `agent.log`, `reflection.jsonl` |
 
 ---
 
-## Quality gates
+## Techniques
 
-### Mechanical gates (scripts)
+### Orchestration (this skill)
 
-```
-evaluate_gates.py
-        │
-        ├─ field_fill_rate ≥ 80%
-        ├─ low_confidence_fields ≤ 3
-        ├─ has_text (≥ 50 chars on a page)
-        └─ page_count ≥ 1
-```
+| Technique | Purpose |
+|-----------|---------|
+| **Progressive disclosure** | Triggers in `description`; details in `references/` loaded on demand |
+| **Folder-staged pipeline** | Every phase leaves artifacts for audit and resume |
+| **Agent semantic review** | Common-sense correction with evidence + confidence ≥ 0.85 |
+| **Minimal human-in-the-loop** | Staff confirm only blocking fields, not every OCR box |
+| **Self-reflection** | Agent logs accuracy improvement vs mechanical-only baseline |
 
-### Semantic gates (agent)
+### Mechanical extraction (via `PHARMADOC_ROOT` engine)
 
-```
-review.json
-        │
-        ├─ escalate_to_human = false
-        ├─ required fields resolved for doc_type
-        ├─ patch confidence ≥ 0.85 (auto-apply)
-        └─ review.json + semantic_review_audit present
-```
+| Technique | Purpose |
+|-----------|---------|
+| Multi-engine OCR ensemble | Native PDF + Tesseract + optional PaddleOCR |
+| Spatial IoU consensus | Merge tokens across engines by bounding-box overlap |
+| Schema-driven fields | CoQ, BSE/TSE, packaging spec regex + labels |
+| Adaptive preprocessing | Best image variant per page |
+| Optional Gemini vision | Cross-validate low-confidence fields |
 
-```mermaid
-flowchart TD
-    DOC[Document JSON] --> MG{Mechanical<br/>gates}
-    MG -->|fail| OCR[OCR retry]
-    OCR --> DOC
-    MG -->|pass or continue| SG[Agent semantic review]
-    SG --> FD{Per-field<br/>decision}
-    FD -->|accept| OK[Candidate validated]
-    FD -->|revise ≥0.85| OK
-    FD -->|reextract| OCR
-    FD -->|escalate| HU[Human alarm]
-    OK --> FG{Semantic<br/>gates}
-    FG -->|pass| VAL[04_validated/]
-    FG -->|fail| HU
-    HU --> ESC[05_escalated/]
-
-    style VAL fill:#bbf7d0
-    style HU fill:#fecaca
-```
+The skill is **tool-agnostic** — any engine producing compatible JSON works. See [`references/tooling.md`](skills/pharmadoc-document-intelligence/references/tooling.md).
 
 ---
 
-## Scripts & artifacts
-
-### Skill scripts (`skills/pharmadoc-document-intelligence/scripts/`)
-
-| Script | Phase | Output |
-|--------|-------|--------|
-| `init_workspace.sh` | Setup | Folder tree + `job.json` |
-| `scan_folder.py` | Discover | `inventory.json` |
-| `run_extract.py` | Mechanical | `02_extracted/*.json` |
-| `evaluate_gates.py` | Mechanical QA | `mechanical_qa.json` |
-| `prepare_semantic_review.py` | Semantic prep | `review_bundle.json` |
-| `apply_semantic_patch.py` | Semantic apply | `revised.json` + audit |
-| `orchestrate_job.py` | Mechanical orchestration | Bundles ready for agent Step 5+ |
-| `check_prerequisites.sh` | Env check | stdout status |
-
-### Reference docs
-
-| File | Content |
-|------|---------|
-| `SKILL.md` | Agent operational playbook |
-| `references/workflow.md` | Checklist + decision trees |
-| `references/semantic-review.md` | Common-sense rules + examples |
-| `references/quality-gates.md` | Gate definitions |
-| `references/tooling.md` | PharmaDoc CLI integration |
-| `assets/job-report-template.md` | Final staff report |
-| `assets/self-assessment-template.md` | Agent accuracy reflection |
-
----
-
-## Install & quick start
-
-> Clone this repository, then copy the skill into your agent skills directory.
+## Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/pharmadoc-document-intelligence-skill.git
+git clone https://github.com/jackyissocute/pharmadoc-document-intelligence-skill.git
 cd pharmadoc-document-intelligence-skill
-
-# Personal agent skills (Codex, etc.)
-mkdir -p ~/.agents/skills
-cp -R skills/pharmadoc-document-intelligence ~/.agents/skills/
-
-# Cursor project scope
-mkdir -p .cursor/skills
-cp -R skills/pharmadoc-document-intelligence .cursor/skills/
-
-# Claude Code
-mkdir -p ~/.claude/skills
-cp -R skills/pharmadoc-document-intelligence ~/.claude/skills/
 ```
 
-> **Note:** Installation is optional during local development. Copy the skill folder when you are ready to use it with an agent.
+Copy the skill folder into your agent skills directory:
+
+| Platform | Path |
+|----------|------|
+| Codex / generic agents | `~/.agents/skills/pharmadoc-document-intelligence` |
+| Cursor (project) | `.cursor/skills/pharmadoc-document-intelligence` |
+| Claude Code | `~/.claude/skills/pharmadoc-document-intelligence` |
+
+```bash
+cp -R skills/pharmadoc-document-intelligence ~/.agents/skills/
+```
 
 ### Prerequisites
 
 ```bash
-export PHARMADOC_ROOT="/path/to/09_Final_Integration_Testing_Evaluation/PharmaDoc_AutoPipeline"
-brew install tesseract   # OCR fallback
-# Optional: GEMINI_API_KEY, PHARMADOC_USE_PADDLE=1
+brew install tesseract          # OCR fallback
+export PHARMADOC_ROOT=/path/to/your/extraction-engine
 bash skills/pharmadoc-document-intelligence/scripts/check_prerequisites.sh
 ```
 
-### Run mechanical phases
+Optional: `GEMINI_API_KEY` for vision retry · `PHARMADOC_USE_PADDLE=1` for scan-heavy batches
+
+---
+
+## Usage
+
+### With an agent (recommended)
+
+```
+Use pharmadoc-document-intelligence to document ~/incoming/sdf-june
+into ~/doc-runs/sdf-june-21. Fix obvious OCR errors from context;
+only ask me if a required field is truly ambiguous.
+```
+
+### Mechanical phases (scripts)
 
 ```bash
-python3 skills/pharmadoc-document-intelligence/scripts/orchestrate_job.py \
-  /path/to/incoming_pdfs \
-  /path/to/workspace \
+SKILL=skills/pharmadoc-document-intelligence
+export PHARMADOC_ROOT=/path/to/extraction-engine
+
+python3 $SKILL/scripts/orchestrate_job.py \
+  ~/incoming/sdf-june \
+  ~/doc-runs/sdf-june-21 \
   --recursive --no-gemini
 ```
 
-Then the **agent completes semantic review** (SKILL.md Step 5+) on each `review_bundle.json`.
+Then the agent completes **Phase 4** (semantic review) on each `review_bundle.json` under `03_semantic_review/`.
 
-### Natural language (any agent)
-
-```
-Use the pharmadoc-document-intelligence skill to document ~/Desktop/incoming_sdf_batch
-into ~/Desktop/pfizer_doc_runs/2025-06-21. Fix obvious OCR errors using context;
-only ask me if something is truly ambiguous.
-```
+More examples: [`examples/example-prompts.md`](examples/example-prompts.md)
 
 ---
 
 ## Repository layout
 
 ```
-agent-skills/
-├── README.md                 ← this file (architecture + workflow)
+pharmadoc-document-intelligence-skill/
+├── README.md                          ← you are here
 ├── LICENSE
 ├── examples/
 │   └── example-prompts.md
 └── skills/
-    └── pharmadoc-document-intelligence/
-        ├── SKILL.md          ← agent playbook (concise steps)
-        ├── scripts/
-        ├── references/
-        └── assets/
+    └── pharmadoc-document-intelligence/   ← install this folder
+        ├── SKILL.md                   ← agent playbook
+        ├── scripts/                   ← deterministic tools
+        ├── references/                ← loaded on demand
+        └── assets/                    ← report templates
 ```
 
-## Related project
+**For agents:** read `skills/pharmadoc-document-intelligence/SKILL.md`  
+**For humans:** this README + workflow tables above
 
-Extraction engine (Project 9 capstone, separate from skill package):
+---
 
-`09_Final_Integration_Testing_Evaluation/PharmaDoc_AutoPipeline/`
+## Quality gates
 
-Research context:
+| Layer | Checks |
+|-------|--------|
+| **Mechanical** | Field fill rate ≥ 80% · low-confidence fields ≤ 3 · text present on page |
+| **Semantic** | No human escalation flag · required fields resolved · patch confidence ≥ 0.85 |
 
-`09_Final_Integration_Testing_Evaluation/Perplexity_Report_OCR_Layout_Frontier_Methods_Healthcare.md`
+Mechanical failure does **not** stop the batch — semantic review may recover from `full_text`.
+
+Full definitions: [`references/quality-gates.md`](skills/pharmadoc-document-intelligence/references/quality-gates.md)
+
+---
 
 ## Safety
 
-- Review scripts before pre-approving shell execution in your agent client.
-- Handwriting and mixed-font OCR errors are expected in round 1.
-- Agent semantic revisions require evidence and audit trail (`review.json`).
+- Review scripts before enabling shell auto-approval in your agent client.
+- Agent semantic revisions require evidence in `review.json` — no silent edits.
 - Source files in the user's original folder are never deleted.
-- Human staff are asked only via `human_review_request.json` — not for routine field editing.
+- Human staff are notified only via `05_escalated/human_review_request.json`.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
