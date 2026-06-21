@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# Portable environment setup for pharmadoc-document-intelligence.
+# Portable environment setup for supplier-doc-intelligence.
 # All paths are relative to this skill folder — no machine-specific defaults.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PHARMADOC_SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+export SUPPLIER_DOC_SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+export PHARMADOC_SKILL_ROOT="${PHARMADOC_SKILL_ROOT:-$SUPPLIER_DOC_SKILL_ROOT}"
 
 INSTALL_DEPS=0
 if [[ "${1:-}" == "--install-deps" ]]; then
   INSTALL_DEPS=1
 fi
 
-echo "PHARMADOC_SKILL_ROOT=$PHARMADOC_SKILL_ROOT"
+echo "SUPPLIER_DOC_SKILL_ROOT=$SUPPLIER_DOC_SKILL_ROOT"
 
 # --- Python ---
 if ! command -v python3 >/dev/null 2>&1; then
@@ -47,15 +48,16 @@ install_tesseract() {
 install_tesseract || true
 
 # --- Extraction engine (user-provided; not bundled in skill repo) ---
-if [[ -n "${PHARMADOC_ROOT:-}" && -f "${PHARMADOC_ROOT}/run_agent.sh" ]]; then
-  echo "[OK]   PHARMADOC_ROOT=$PHARMADOC_ROOT"
-  if [[ "$INSTALL_DEPS" -eq 1 && -f "${PHARMADOC_ROOT}/requirements.txt" ]]; then
-    echo "[INFO] Installing Python deps from PHARMADOC_ROOT/requirements.txt"
-    python3 -m pip install -r "${PHARMADOC_ROOT}/requirements.txt"
+ENGINE_ROOT="${SUPPLIER_DOC_ENGINE_ROOT:-${PHARMADOC_ROOT:-}}"
+if [[ -n "$ENGINE_ROOT" && -f "${ENGINE_ROOT}/run_agent.sh" ]]; then
+  echo "[OK]   SUPPLIER_DOC_ENGINE_ROOT=$ENGINE_ROOT"
+  if [[ "$INSTALL_DEPS" -eq 1 && -f "${ENGINE_ROOT}/requirements.txt" ]]; then
+    echo "[INFO] Installing Python deps from engine requirements.txt"
+    python3 -m pip install -r "${ENGINE_ROOT}/requirements.txt"
   fi
 else
-  echo "[INFO] PHARMADOC_ROOT not set."
-  echo "       Clone the extraction engine and export PHARMADOC_ROOT to its root"
+  echo "[INFO] SUPPLIER_DOC_ENGINE_ROOT not set."
+  echo "       Clone the extraction engine and export SUPPLIER_DOC_ENGINE_ROOT to its root"
   echo "       (directory containing run_agent.sh). See references/tooling.md."
 fi
 
@@ -68,7 +70,7 @@ fi
 
 echo ""
 echo "Setup complete. Use scripts via:"
-echo "  python3 \"\$PHARMADOC_SKILL_ROOT/scripts/orchestrate_job.py\" <source> <workspace> -r --no-gemini"
+echo "  python3 \"\$SUPPLIER_DOC_SKILL_ROOT/scripts/orchestrate_job.py\" <source> <workspace> -r --no-gemini"
 echo ""
 echo "Add to your shell profile (optional):"
-echo "  export PHARMADOC_SKILL_ROOT=\"$PHARMADOC_SKILL_ROOT\""
+echo "  export SUPPLIER_DOC_SKILL_ROOT=\"$SUPPLIER_DOC_SKILL_ROOT\""

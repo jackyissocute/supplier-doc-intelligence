@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Run PharmaDoc extraction and write JSON into workspace/02_extracted/.
+Run extraction engine and write JSON into workspace/02_extracted/.
 
-Requires PHARMADOC_ROOT pointing at PharmaDoc_AutoPipeline (or sibling default).
+Requires PHARMADOC_ROOT or SUPPLIER_DOC_ENGINE_ROOT pointing at the extraction engine.
 """
 
 from __future__ import annotations
@@ -18,12 +18,14 @@ def skill_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def resolve_pharmadoc_root() -> Path:
-    if env := os.environ.get("PHARMADOC_ROOT"):
+def resolve_engine_root() -> Path:
+    env = os.environ.get("SUPPLIER_DOC_ENGINE_ROOT") or os.environ.get("PHARMADOC_ROOT")
+    if env:
         return Path(env).expanduser().resolve()
     raise RuntimeError(
-        "PHARMADOC_ROOT is not set. Clone the extraction engine, then:\n"
-        "  export PHARMADOC_ROOT=/path/to/engine\n"
+        "Extraction engine path is not set. Clone the engine, then:\n"
+        "  export SUPPLIER_DOC_ENGINE_ROOT=/path/to/engine\n"
+        "  # or legacy: export PHARMADOC_ROOT=/path/to/engine\n"
         "See references/tooling.md in this skill folder."
     )
 
@@ -47,7 +49,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    root = resolve_pharmadoc_root()
+    root = resolve_engine_root()
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 

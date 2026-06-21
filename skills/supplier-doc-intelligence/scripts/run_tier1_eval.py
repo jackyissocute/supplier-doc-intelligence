@@ -2,7 +2,7 @@
 """
 Tier-1 hard-case evaluation: generate noisy scan variants and measure field accuracy.
 
-Requires PHARMADOC_ROOT pointing at the extraction engine.
+Requires SUPPLIER_DOC_ENGINE_ROOT or PHARMADOC_ROOT pointing at the extraction engine.
 """
 
 from __future__ import annotations
@@ -20,10 +20,11 @@ def skill_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def resolve_pharmadoc_root() -> Path:
-    if env := os.environ.get("PHARMADOC_ROOT"):
+def resolve_engine_root() -> Path:
+    env = os.environ.get("SUPPLIER_DOC_ENGINE_ROOT") or os.environ.get("PHARMADOC_ROOT")
+    if env:
         return Path(env).expanduser().resolve()
-    raise RuntimeError("PHARMADOC_ROOT is not set. See references/tooling.md")
+    raise RuntimeError("SUPPLIER_DOC_ENGINE_ROOT is not set. See references/tooling.md")
 
 
 def main() -> int:
@@ -32,13 +33,13 @@ def main() -> int:
         "sample_pdf",
         type=Path,
         nargs="?",
-        help="Sample PDF (default: $PHARMADOC_ROOT/samples/pharma-blob-sample.pdf)",
+        help="Sample PDF (default: $SUPPLIER_DOC_ENGINE_ROOT/samples/pharma-blob-sample.pdf)",
     )
     parser.add_argument("--page", type=int, default=0, help="Page index for hard-case PNG")
     parser.add_argument("--output", "-o", type=Path, help="Write JSON report here")
     args = parser.parse_args()
 
-    engine = resolve_pharmadoc_root()
+    engine = resolve_engine_root()
     sample = args.sample_pdf or (engine / "samples" / "pharma-blob-sample.pdf")
     if not sample.exists():
         print(f"Sample not found: {sample}", file=sys.stderr)
@@ -49,7 +50,7 @@ def main() -> int:
         print(f"Missing {gen_script}", file=sys.stderr)
         return 1
 
-    with tempfile.TemporaryDirectory(prefix="pharmadoc-tier1-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="supplier-doc-tier1-") as tmp:
         out_dir = Path(tmp)
         subprocess.run(
             [sys.executable, str(gen_script), str(sample), str(out_dir), "--page", str(args.page)],

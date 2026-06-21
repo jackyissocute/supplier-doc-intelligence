@@ -3,10 +3,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PHARMADOC_SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+export SUPPLIER_DOC_SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-echo "=== PharmaDoc Document Intelligence — prerequisites ==="
-echo "Skill root: $PHARMADOC_SKILL_ROOT"
+echo "=== Supplier Doc Intelligence — prerequisites ==="
+echo "Skill root: $SUPPLIER_DOC_SKILL_ROOT"
 
 check() {
   local label="$1"
@@ -23,14 +23,15 @@ check() {
 MISSING=0
 check "python3" "command -v python3" || MISSING=1
 check "tesseract" "command -v tesseract" || {
-  echo "       Install: bash \"$PHARMADOC_SKILL_ROOT/scripts/setup_environment.sh\" --install-deps"
+  echo "       Install: bash \"$SUPPLIER_DOC_SKILL_ROOT/scripts/setup_environment.sh\" --install-deps"
   MISSING=1
 }
 
-if [[ -n "${PHARMADOC_ROOT:-}" && -f "${PHARMADOC_ROOT}/run_agent.sh" ]]; then
-  echo "[OK]   PHARMADOC_ROOT=$PHARMADOC_ROOT"
+ENGINE_ROOT="${SUPPLIER_DOC_ENGINE_ROOT:-${PHARMADOC_ROOT:-}}"
+if [[ -n "$ENGINE_ROOT" && -f "${ENGINE_ROOT}/run_agent.sh" ]]; then
+  echo "[OK]   SUPPLIER_DOC_ENGINE_ROOT=$ENGINE_ROOT"
 else
-  echo "[MISS] PHARMADOC_ROOT (export path to extraction engine — see references/tooling.md)"
+  echo "[MISS] SUPPLIER_DOC_ENGINE_ROOT (export path to extraction engine — see references/tooling.md)"
   MISSING=1
 fi
 

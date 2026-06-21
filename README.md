@@ -1,13 +1,13 @@
-# PharmaDoc Document Intelligence
+# Supplier Doc Intelligence
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Agent Skills](https://img.shields.io/badge/Agent-Skills-green.svg)](https://github.com/agentskills/agentskills)
 
-Open-source [Agent Skill](https://github.com/agentskills/agentskills) for **autonomous pharmaceutical document extraction** — batch PDFs and images → structured JSON, with agent semantic review and human escalation only as a last resort.
+Open-source [Agent Skill](https://github.com/agentskills/agentskills) for **autonomous supplier document extraction** — batch CoQ, SDF, BSE/TSE, packaging specs, scans → structured JSON, with agent semantic review and human escalation only as a last resort.
 
 Works with **Codex**, **Cursor**, **GitHub Copilot**, **Claude Code**, and other agents that load `SKILL.md`.
 
-**Repository:** [github.com/jackyissocute/pharmadoc-document-intelligence-skill](https://github.com/jackyissocute/pharmadoc-document-intelligence-skill)
+**Repository:** [github.com/jackyissocute/supplier-doc-intelligence](https://github.com/jackyissocute/supplier-doc-intelligence)
 
 ---
 
@@ -86,7 +86,7 @@ flowchart LR
 | **semantic-pass** | “Review extractions / fix OCR mistakes” |
 | **report-only** | “Summarize what passed vs failed” |
 
-The agent picks the mode from intent. Details in [`SKILL.md`](skills/pharmadoc-document-intelligence/SKILL.md).
+The agent picks the mode from intent. Details in [`SKILL.md`](skills/supplier-doc-intelligence/SKILL.md).
 
 ---
 
@@ -119,7 +119,7 @@ Each run creates an auditable workspace:
 | **Minimal human-in-the-loop** | Staff confirm only blocking fields, not every OCR box |
 | **Self-reflection** | Agent logs accuracy improvement vs mechanical-only baseline |
 
-### Mechanical extraction (via `PHARMADOC_ROOT` engine)
+### Mechanical extraction (via `SUPPLIER_DOC_ENGINE_ROOT` engine)
 
 | Tier | Technique | Best for |
 |------|-----------|----------|
@@ -132,35 +132,35 @@ Each run creates an auditable workspace:
 | All | Multi-engine OCR ensemble | Native PDF + Tesseract + optional PaddleOCR |
 | All | Optional Gemini vision | Cross-validate disputed fields |
 
-The skill is **tool-agnostic** — any engine producing compatible JSON works. See [`references/mechanical-extraction.md`](skills/pharmadoc-document-intelligence/references/mechanical-extraction.md).
+The skill is **tool-agnostic** — any engine producing compatible JSON works. See [`references/mechanical-extraction.md`](skills/supplier-doc-intelligence/references/mechanical-extraction.md).
 
 ---
 
 ## Install
 
 ```bash
-git clone https://github.com/jackyissocute/pharmadoc-document-intelligence-skill.git
-cd pharmadoc-document-intelligence-skill
+git clone https://github.com/jackyissocute/supplier-doc-intelligence.git
+cd supplier-doc-intelligence
 ```
 
 Copy the skill folder into your agent skills directory:
 
 | Platform | Path |
 |----------|------|
-| Codex / generic agents | `~/.agents/skills/pharmadoc-document-intelligence` |
-| Cursor (project) | `.cursor/skills/pharmadoc-document-intelligence` |
-| Claude Code | `~/.claude/skills/pharmadoc-document-intelligence` |
+| Codex / generic agents | `~/.agents/skills/supplier-doc-intelligence` |
+| Cursor (project) | `.cursor/skills/supplier-doc-intelligence` |
+| Claude Code | `~/.claude/skills/supplier-doc-intelligence` |
 
 ```bash
-cp -R skills/pharmadoc-document-intelligence ~/.agents/skills/
+cp -R skills/supplier-doc-intelligence ~/.agents/skills/
 ```
 
 ### Prerequisites
 
 ```bash
-cd skills/pharmadoc-document-intelligence   # or your installed copy
+cd skills/supplier-doc-intelligence   # or your installed copy
 bash scripts/setup_environment.sh --install-deps   # tesseract + pip deps (first time)
-export PHARMADOC_ROOT=/path/to/your/extraction-engine
+export SUPPLIER_DOC_ENGINE_ROOT=/path/to/your/extraction-engine
 bash scripts/check_prerequisites.sh
 ```
 
@@ -175,7 +175,7 @@ Optional: `GEMINI_API_KEY` for vision retry · `PHARMADOC_USE_PADDLE=1` or `--sc
 ### With an agent (recommended)
 
 ```
-Use pharmadoc-document-intelligence to document ~/incoming/sdf-june
+Use supplier-doc-intelligence to document ~/incoming/sdf-june
 into ~/doc-runs/sdf-june-21. Fix obvious OCR errors from context;
 only ask me if a required field is truly ambiguous.
 ```
@@ -185,8 +185,8 @@ For scan-heavy folders, add: “use scan mode for Phase 2.”
 ### Mechanical phases (scripts)
 
 ```bash
-SKILL=skills/pharmadoc-document-intelligence
-export PHARMADOC_ROOT=/path/to/extraction-engine
+SKILL=skills/supplier-doc-intelligence
+export SUPPLIER_DOC_ENGINE_ROOT=/path/to/extraction-engine
 
 # Default (Tier 1 on)
 python3 $SKILL/scripts/orchestrate_job.py \
@@ -210,20 +210,20 @@ More examples: [`examples/example-prompts.md`](examples/example-prompts.md)
 ## Repository layout
 
 ```
-pharmadoc-document-intelligence-skill/
+supplier-doc-intelligence/
 ├── README.md                          ← you are here
 ├── LICENSE
 ├── examples/
 │   └── example-prompts.md
 └── skills/
-    └── pharmadoc-document-intelligence/   ← install this folder
+    └── supplier-doc-intelligence/   ← install this folder
         ├── SKILL.md                   ← agent playbook
         ├── scripts/                   ← deterministic tools
         ├── references/                ← loaded on demand
         └── assets/                    ← report templates
 ```
 
-**For agents:** read `skills/pharmadoc-document-intelligence/SKILL.md`  
+**For agents:** read `skills/supplier-doc-intelligence/SKILL.md`  
 **For humans:** this README + workflow tables above
 
 ---
@@ -237,7 +237,7 @@ pharmadoc-document-intelligence-skill/
 
 Mechanical failure does **not** stop the batch — semantic review may recover from `full_text`.
 
-Full definitions: [`references/quality-gates.md`](skills/pharmadoc-document-intelligence/references/quality-gates.md)
+Full definitions: [`references/quality-gates.md`](skills/supplier-doc-intelligence/references/quality-gates.md)
 
 ---
 

@@ -21,7 +21,7 @@
 ## Explicit invocation
 
 ```
-Use pharmadoc-document-intelligence to document ~/incoming/pharma-batch-7
+Use supplier-doc-intelligence to document ~/incoming/pharma-batch-7
 ```
 
 ## Out of scope (skill should NOT activate)

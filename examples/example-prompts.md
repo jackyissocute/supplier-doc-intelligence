@@ -5,7 +5,7 @@ Install the skill, then try these with your agent:
 ## Full documenting job
 
 ```
-Use pharmadoc-document-intelligence to document ~/incoming/sdf-june
+Use supplier-doc-intelligence to document ~/incoming/sdf-june
 into ~/doc-runs/sdf-june-21. Fix obvious OCR errors from context;
 only escalate what you cannot resolve autonomously.
 ```
@@ -31,4 +31,4 @@ Review the JSON in ~/doc-runs/batch-3/02_extracted for unit and
 lot-number OCR errors, then finalize validated output.
 ```
 
-See also `skills/pharmadoc-document-intelligence/references/examples.md`.
+See also `skills/supplier-doc-intelligence/references/examples.md`.

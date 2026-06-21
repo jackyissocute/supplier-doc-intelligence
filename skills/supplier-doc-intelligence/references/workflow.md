@@ -11,7 +11,7 @@ Use during **full-batch** mode. Log each step to `<workspace>/logs/agent.log`.
 
 ## Phase 2 — Extract
 
-- [ ] `export PHARMADOC_ROOT=...` (see tooling.md)
+- [ ] `export SUPPLIER_DOC_ENGINE_ROOT=...` (see tooling.md)
 - [ ] **Digital PDFs:** `python3 scripts/run_extract.py <SOURCE> <WORKSPACE> -r --no-gemini`
 - [ ] **Scans / handwriting:** add `--scan-mode` (Tier 1 + PaddleOCR)
 - [ ] Check `page_mode` and `fields[].source` in `02_extracted/*.json`

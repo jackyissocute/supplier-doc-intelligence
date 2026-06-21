@@ -1,9 +1,9 @@
 ---
-name: pharmadoc-document-intelligence
+name: supplier-doc-intelligence
 description: Document, digitize, or extract healthcare and pharmaceutical PDFs and images — SDF, certificates of quality (CoQ), BSE/TSE, packaging specs, lot numbers, expiry dates, sterilization fields, handwriting, mixed fonts. Use for batch folder processing, AI documenting workflows, OCR extraction, mechanical QA, agent semantic review with common-sense correction, and structured JSON output. Human staff only as last resort. Do not use for clinical diagnosis, medical advice, or generic PDF editing without extraction.
 ---
 
-# PharmaDoc Document Intelligence
+# Supplier Doc Intelligence
 
 Autonomous pharma document pipeline: **scripts extract mechanically** → **agent reviews with common sense** → **validated JSON** (human alarm only if truly ambiguous).
 
@@ -15,18 +15,18 @@ Autonomous pharma document pipeline: **scripts extract mechanically** → **agen
 
 ```bash
 # Portable paths — works on any machine after skill is copied to ~/.agents/skills/ etc.
-SKILL_ROOT="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd || echo "$PHARMADOC_SKILL_ROOT")"
+SKILL_ROOT="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd || echo "$SUPPLIER_DOC_SKILL_ROOT")"
 bash "$SKILL_ROOT/scripts/setup_environment.sh"          # check deps
 # If tesseract or pip packages missing:
 bash "$SKILL_ROOT/scripts/setup_environment.sh" --install-deps
 
-export PHARMADOC_ROOT="/path/to/extraction-engine"   # required once per machine
+export SUPPLIER_DOC_ENGINE_ROOT="/path/to/extraction-engine"   # required once per machine
 bash "$SKILL_ROOT/scripts/init_workspace.sh" "<WORKSPACE>"
 python3 "$SKILL_ROOT/scripts/orchestrate_job.py" "<SOURCE>" "<WORKSPACE>" -r --no-gemini
 # Then Phase 4 semantic review on each review_bundle.json
 ```
 
-Set `PHARMADOC_ROOT` to your extraction engine (see [references/tooling.md](references/tooling.md)). Scripts auto-set `PHARMADOC_SKILL_ROOT` — no hardcoded user paths.
+Set `SUPPLIER_DOC_ENGINE_ROOT` to your extraction engine (see [references/tooling.md](references/tooling.md)). Scripts auto-set `SUPPLIER_DOC_SKILL_ROOT` — no hardcoded user paths.
 
 ## When to use
 
@@ -79,7 +79,7 @@ python3 scripts/scan_folder.py "<SOURCE>" -r -o "<WORKSPACE>/00_manifest/invento
 ### Phase 2 — Extract (Tier 1 + Tier 2 mechanical engine)
 
 ```bash
-export PHARMADOC_ROOT="/path/to/extraction-engine"
+export SUPPLIER_DOC_ENGINE_ROOT="/path/to/extraction-engine"
 
 # Default — Tier 1 crop re-OCR enabled (best for mixed batches)
 python3 scripts/run_extract.py "<SOURCE>" "<WORKSPACE>" -r --no-gemini
@@ -100,7 +100,7 @@ See [references/mechanical-extraction.md](references/mechanical-extraction.md) f
 
 **Retries (max 2):** `--scan-mode` → omit `--no-gemini` → re-run only failed docs.
 
-**Hard-case eval:** `python3 scripts/run_tier1_eval.py -o /tmp/tier1-report.json` (requires `PHARMADOC_ROOT`).
+**Hard-case eval:** `python3 scripts/run_tier1_eval.py -o /tmp/tier1-report.json` (requires `SUPPLIER_DOC_ENGINE_ROOT`).
 
 ### Phase 3 — Mechanical QA
 
