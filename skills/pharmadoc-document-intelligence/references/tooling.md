@@ -33,7 +33,8 @@ Tesseract is **not** installed silently on every skill run — the agent (or use
 | `PHARMADOC_SKILL_ROOT` | Auto-set by scripts | Path to this skill folder |
 | `PHARMADOC_ROOT` | Yes for Phase 2 | Path to extraction engine root (`run_agent.sh` lives here) |
 | `GEMINI_API_KEY` | No | Vision cross-validation / retry |
-| `PHARMADOC_USE_PADDLE=1` | No | Stronger OCR on scans |
+| `PHARMADOC_USE_PADDLE=1` | No | Stronger OCR on scans (also set by `--scan-mode`) |
+| `PHARMADOC_TIER1=1` | No (default on) | Per-field crop re-OCR at 300 DPI |
 
 ```bash
 export PHARMADOC_ROOT="/path/to/your/extraction-engine"
@@ -50,12 +51,14 @@ source "$PHARMADOC_SKILL_ROOT/scripts/env.sh"   # sets PHARMADOC_SKILL_ROOT
 
 python3 "$PHARMADOC_SKILL_ROOT/scripts/orchestrate_job.py" <source> <workspace> -r --no-gemini
 python3 "$PHARMADOC_SKILL_ROOT/scripts/run_extract.py" <source> <workspace> -r --no-gemini
+python3 "$PHARMADOC_SKILL_ROOT/scripts/run_extract.py" <source> <workspace> -r --scan-mode --no-gemini
+python3 "$PHARMADOC_SKILL_ROOT/scripts/run_tier1_eval.py" -o /tmp/tier1-report.json
 ```
 
 Or `cd` into the skill folder and use `scripts/...` relative paths.
 
 ## Extraction JSON contract
 
-See [mechanical-extraction.md](mechanical-extraction.md) for Tier-2 field `source` values.
+See [mechanical-extraction.md](mechanical-extraction.md) for Tier 1 + Tier 2 field `source` values and Phase 2 diagram.
 
 Do not hallucinate extraction results. If `PHARMADOC_ROOT` is missing, complete Phase 1 (scan/inventory) and ask the user to configure the engine.

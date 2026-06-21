@@ -12,8 +12,11 @@ Use during **full-batch** mode. Log each step to `<workspace>/logs/agent.log`.
 ## Phase 2 — Extract
 
 - [ ] `export PHARMADOC_ROOT=...` (see tooling.md)
-- [ ] `python3 scripts/run_extract.py <SOURCE> <WORKSPACE> -r --no-gemini`
-- [ ] If mechanical QA poor: retry with Gemini and/or `PHARMADOC_USE_PADDLE=1` (max 2 retries)
+- [ ] **Digital PDFs:** `python3 scripts/run_extract.py <SOURCE> <WORKSPACE> -r --no-gemini`
+- [ ] **Scans / handwriting:** add `--scan-mode` (Tier 1 + PaddleOCR)
+- [ ] Check `page_mode` and `fields[].source` in `02_extracted/*.json`
+- [ ] If mechanical QA poor: retry with Gemini (omit `--no-gemini`) or `--scan-mode` (max 2 retries)
+- [ ] Optional stress test: `python3 scripts/run_tier1_eval.py -o /tmp/tier1-report.json`
 
 ## Phase 3 — Mechanical QA
 

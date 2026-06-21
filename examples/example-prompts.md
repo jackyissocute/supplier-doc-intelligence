@@ -17,6 +17,13 @@ Extract lot numbers, expiry dates, and product names from all PDFs
 in ~/incoming/certificates into ~/doc-runs/cert-run-01.
 ```
 
+## Scan-heavy batch (Tier 1)
+
+```
+Document all scanned CoQ images in ~/incoming/scanned-coq into
+~/doc-runs/coq-scan. Use scan mode for Phase 2 extraction.
+```
+
 ## Semantic review pass
 
 ```

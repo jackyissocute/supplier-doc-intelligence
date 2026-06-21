@@ -35,14 +35,28 @@ def main() -> int:
     parser.add_argument("--recursive", "-r", action="store_true")
     parser.add_argument("--no-gemini", action="store_true")
     parser.add_argument("--use-paddle", action="store_true", help="Set PHARMADOC_USE_PADDLE=1")
+    parser.add_argument(
+        "--no-tier1",
+        action="store_true",
+        help="Disable Tier-1 per-field crop re-OCR (PHARMADOC_TIER1=0)",
+    )
+    parser.add_argument(
+        "--scan-mode",
+        action="store_true",
+        help="Scan-heavy preset: Tier-1 + PaddleOCR enabled",
+    )
     args = parser.parse_args()
 
     root = resolve_pharmadoc_root()
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
-    if args.use_paddle:
+    if args.use_paddle or args.scan_mode:
         os.environ["PHARMADOC_USE_PADDLE"] = "1"
+    if args.no_tier1:
+        os.environ["PHARMADOC_TIER1"] = "0"
+    elif args.scan_mode:
+        os.environ["PHARMADOC_TIER1"] = "1"
 
     from agent.scanner import discover
     from pipeline.runner import DocumentPipeline, process_batch
@@ -58,10 +72,12 @@ def main() -> int:
         return 1
 
     enable_gemini = not args.no_gemini
+    enable_tier1 = not args.no_tier1
     results = process_batch(
         files,
         enable_gemini=enable_gemini,
         enable_cross_validation=enable_gemini,
+        enable_tier1=enable_tier1,
     )
 
     manifest = []

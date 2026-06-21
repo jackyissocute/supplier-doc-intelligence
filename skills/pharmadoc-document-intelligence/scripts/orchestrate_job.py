@@ -36,6 +36,11 @@ def main() -> int:
     parser.add_argument("workspace", type=Path)
     parser.add_argument("--recursive", "-r", action="store_true")
     parser.add_argument("--no-gemini", action="store_true")
+    parser.add_argument(
+        "--scan-mode",
+        action="store_true",
+        help="Scan-heavy preset for Phase 2 (Tier 1 + PaddleOCR)",
+    )
     args = parser.parse_args()
 
     source = args.source.expanduser().resolve()
@@ -55,14 +60,16 @@ def main() -> int:
     ])
     log(workspace, "scan complete")
 
-    run([
+    extract_cmd = [
         sys.executable,
         str(SCRIPT_DIR / "run_extract.py"),
         str(source),
         str(workspace),
         *(["--recursive"] if args.recursive else []),
         *(["--no-gemini"] if args.no_gemini else []),
-    ])
+        *(["--scan-mode"] if args.scan_mode else []),
+    ]
+    run(extract_cmd)
     log(workspace, "extraction round 1 complete")
 
     extracted = sorted((workspace / "02_extracted").glob("*.json"))

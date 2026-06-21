@@ -76,18 +76,31 @@ bash scripts/init_workspace.sh "<WORKSPACE>"
 python3 scripts/scan_folder.py "<SOURCE>" -r -o "<WORKSPACE>/00_manifest/inventory.json"
 ```
 
-### Phase 2 — Extract (Tier 2 mechanical engine)
+### Phase 2 — Extract (Tier 1 + Tier 2 mechanical engine)
 
 ```bash
 export PHARMADOC_ROOT="/path/to/extraction-engine"
+
+# Default — Tier 1 crop re-OCR enabled (best for mixed batches)
 python3 scripts/run_extract.py "<SOURCE>" "<WORKSPACE>" -r --no-gemini
+
+# Scan / handwriting heavy folder
+python3 scripts/run_extract.py "<SOURCE>" "<WORKSPACE>" -r --scan-mode --no-gemini
 ```
 
-The engine applies **layout-aware field linking**, **confidence calibration**, **doc-type refiners**, and **OCR char fixes** before semantic review. See [references/mechanical-extraction.md](references/mechanical-extraction.md).
+**Phase 2 stack:** multi-engine OCR → layout fields (Tier 2) → **per-field crop re-OCR on scans** (Tier 1) → optional Gemini retry.
 
-For scans or hard cases: `PHARMADOC_USE_PADDLE=1`. Inspect `fields[].source` (`regex`, `layout`, `regex+layout`) when deciding Phase 4 focus.
+See [references/mechanical-extraction.md](references/mechanical-extraction.md) for the full diagram and `source` values.
 
-Retry (max 2): re-run with Gemini (omit `--no-gemini`) or `PHARMADOC_USE_PADDLE=1` for scans.
+| JSON signal | Meaning |
+|-------------|---------|
+| `page_mode: scanned` | Tier 1 was prioritized on this page |
+| `source` contains `tier1_` | Value came from crop re-OCR |
+| `tier1_enabled: true` | Tier 1 ran on this page |
+
+**Retries (max 2):** `--scan-mode` → omit `--no-gemini` → re-run only failed docs.
+
+**Hard-case eval:** `python3 scripts/run_tier1_eval.py -o /tmp/tier1-report.json` (requires `PHARMADOC_ROOT`).
 
 ### Phase 3 — Mechanical QA
 
@@ -163,5 +176,5 @@ Rules: [references/semantic-review.md](references/semantic-review.md)
 | [references/workflow.md](references/workflow.md) | Running full batch |
 | [references/semantic-review.md](references/semantic-review.md) | Phase 4 decisions |
 | [references/quality-gates.md](references/quality-gates.md) | Pass/fail thresholds |
-| [references/mechanical-extraction.md](references/mechanical-extraction.md) | Phase 2 Tier-2 engine behavior |
+| [references/mechanical-extraction.md](references/mechanical-extraction.md) | Phase 2 Tier 1 + Tier 2 engine behavior |
 | [references/tooling.md](references/tooling.md) | Setup extraction engine |

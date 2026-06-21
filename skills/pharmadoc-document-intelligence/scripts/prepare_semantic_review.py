@@ -79,6 +79,8 @@ def build_bundle(data: dict[str, Any]) -> dict[str, Any]:
             {
                 "page_num": p.get("page_num"),
                 "doc_type": p.get("doc_type"),
+                "page_mode": p.get("page_mode"),
+                "tier1_enabled": p.get("tier1_enabled"),
                 "full_text_excerpt": _text_excerpt(p.get("full_text") or ""),
                 "fields": p.get("fields") or {},
             }

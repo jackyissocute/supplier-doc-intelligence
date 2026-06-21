@@ -16,7 +16,7 @@ Works with **Codex**, **Cursor**, **GitHub Copilot**, **Claude Code**, and other
 Staff drop incoming supplier documents (CoQ, SDF, BSE/TSE, packaging specs, scans) into a folder. An agent loads this skill and runs a **5-phase pipeline**:
 
 1. **Ingest** — scan files, create workspace  
-2. **Extract** — multi-engine OCR + schema fields  
+2. **Extract** — multi-engine OCR + Tier 1 crop re-OCR + Tier 2 layout fields  
 3. **Mechanical QA** — fill-rate and confidence gates  
 4. **Semantic review** — agent reads context, fixes obvious errors (e.g. µg vs mg, lot `I` vs `1`)  
 5. **Deliver** — validated JSON + report; human alarm only for true ambiguity  
@@ -30,21 +30,39 @@ Staff drop incoming supplier documents (CoQ, SDF, BSE/TSE, packaging specs, scan
 ### Five phases (linear pipeline)
 
 ```
-  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-  │  1 INGEST   │───▶│  2 EXTRACT  │───▶│ 3 MECH QA   │───▶│ 4 SEMANTIC  │───▶│  5 DELIVER  │
-  │   scripts   │    │ OCR engine  │    │   scripts   │    │    agent    │    │ agent+files │
-  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-        │                  │                  │                  │                  │
-   inventory.json    02_extracted/     mechanical_qa.json   review.json      04_validated/
-                                                                               05_escalated/
-                                                                               07_reports/
+  ┌─────────────┐    ┌─────────────────────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+  │  1 INGEST   │───▶│       2 EXTRACT             │───▶│ 3 MECH QA   │───▶│ 4 SEMANTIC  │───▶│  5 DELIVER  │
+  │   scripts   │    │ Tier1 crop OCR + Tier2 layout│    │   scripts   │    │    agent    │    │ agent+files │
+  └─────────────┘    └─────────────────────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+        │                         │                            │                  │                  │
+   inventory.json           02_extracted/              mechanical_qa.json    review.json      04_validated/
+                                                                                              05_escalated/
+                                                                                              07_reports/
 ```
+
+### Phase 2 detail (mechanical extraction)
+
+```
+  PDF / image
+       │
+       ▼
+  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+  │ Multi-engine │────▶│  Tier 2      │────▶│  Tier 1      │
+  │ OCR ensemble │     │ layout fields│     │ crop re-OCR  │
+  └──────────────┘     └──────────────┘     └──────────────┘
+       digital PDF          all docs           scans / low-conf
+```
+
+| Batch type | Command |
+|------------|---------|
+| Mixed / default | `run_extract.py … -r --no-gemini` |
+| Scans & handwriting | `run_extract.py … -r --scan-mode --no-gemini` |
 
 ### Who does what
 
 ```mermaid
 flowchart LR
-    A[Staff folder<br/>PDFs & images] --> B[Phase 1-3<br/>Python scripts]
+    A[Staff folder<br/>PDFs & images] --> B[Phase 1–3<br/>Python scripts]
     B --> C[Phase 4<br/>Agent LLM]
     C --> D{Confident?}
     D -->|Yes| E[Validated JSON]
@@ -103,18 +121,18 @@ Each run creates an auditable workspace:
 
 ### Mechanical extraction (via `PHARMADOC_ROOT` engine)
 
-| Technique | Purpose |
-|-----------|---------|
-| Multi-engine OCR ensemble | Native PDF + Tesseract + optional PaddleOCR |
-| Spatial IoU consensus | Merge tokens across engines by bounding-box overlap |
-| **Layout-aware fields (Tier 2)** | Label→value linking on same OCR line |
-| **Confidence calibration (Tier 2)** | Per-field score from regex + layout + engines |
-| **Doc-type refiners (Tier 2)** | CoQ, packaging, BSE-specific post-extraction |
-| Schema-driven fields | CoQ, BSE/TSE, packaging spec regex + labels |
-| Adaptive preprocessing | Best image variant per page |
-| Optional Gemini vision | Cross-validate low-confidence fields |
+| Tier | Technique | Best for |
+|------|-----------|----------|
+| **Tier 1** | Page mode detection (`digital` / `scanned` / `mixed`) | Routing OCR strategy |
+| **Tier 1** | Per-field crop re-OCR at 300 DPI | **Scanned PDFs, handwriting, low-confidence fields** |
+| **Tier 1** | `--scan-mode` preset (Tier 1 + PaddleOCR) | Scan-heavy batches |
+| **Tier 2** | Layout-aware label→value linking | Structured pharma forms |
+| **Tier 2** | Confidence calibration | Per-field scoring |
+| **Tier 2** | Doc-type refiners (CoQ, PKG, BSE) | Domain-specific cleanup |
+| All | Multi-engine OCR ensemble | Native PDF + Tesseract + optional PaddleOCR |
+| All | Optional Gemini vision | Cross-validate disputed fields |
 
-The skill is **tool-agnostic** — any engine producing compatible JSON works. See [`references/tooling.md`](skills/pharmadoc-document-intelligence/references/tooling.md).
+The skill is **tool-agnostic** — any engine producing compatible JSON works. See [`references/mechanical-extraction.md`](skills/pharmadoc-document-intelligence/references/mechanical-extraction.md).
 
 ---
 
@@ -146,7 +164,7 @@ export PHARMADOC_ROOT=/path/to/your/extraction-engine
 bash scripts/check_prerequisites.sh
 ```
 
-Optional: `GEMINI_API_KEY` for vision retry · `PHARMADOC_USE_PADDLE=1` for scan-heavy batches
+Optional: `GEMINI_API_KEY` for vision retry · `PHARMADOC_USE_PADDLE=1` or `--scan-mode` for scan-heavy batches · `PHARMADOC_TIER1=1` (default on)
 
 **Note:** Tesseract installs once per machine via `setup_environment.sh --install-deps` — not on every document job.
 
@@ -162,16 +180,25 @@ into ~/doc-runs/sdf-june-21. Fix obvious OCR errors from context;
 only ask me if a required field is truly ambiguous.
 ```
 
+For scan-heavy folders, add: “use scan mode for Phase 2.”
+
 ### Mechanical phases (scripts)
 
 ```bash
 SKILL=skills/pharmadoc-document-intelligence
 export PHARMADOC_ROOT=/path/to/extraction-engine
 
+# Default (Tier 1 on)
 python3 $SKILL/scripts/orchestrate_job.py \
   ~/incoming/sdf-june \
   ~/doc-runs/sdf-june-21 \
   --recursive --no-gemini
+
+# Scans / handwriting
+python3 $SKILL/scripts/orchestrate_job.py \
+  ~/incoming/scanned-coq \
+  ~/doc-runs/coq-scan \
+  --recursive --scan-mode --no-gemini
 ```
 
 Then the agent completes **Phase 4** (semantic review) on each `review_bundle.json` under `03_semantic_review/`.
@@ -223,14 +250,15 @@ Full definitions: [`references/quality-gates.md`](skills/pharmadoc-document-inte
 
 ---
 
-## Roadmap (optional accuracy upgrades)
+## Accuracy roadmap
 
 | Tier | Status | Impact |
 |------|--------|--------|
 | **Tier 2** (layout, calibration, doc-type refiners) | **Shipped** | Better fields on structured pharma forms |
-| **Tier 1** (per-field crop re-OCR, larger eval set) | Planned | Best for **scanned** PDFs and handwriting — add later to Phase 2 |
+| **Tier 1** (page mode, per-field crop re-OCR, scan preset) | **Shipped** | Best for **scanned** PDFs and handwriting |
+| **Tier 0** (larger eval corpus, table extraction) | Planned | Benchmark expansion + table-heavy forms |
 
-Tier 1 is **not required** for the skill to work today. It is the next engineering step when you need higher accuracy on hard scans; it plugs into the same Phase 2 workflow without changing the agent skill phases.
+Tier 1 runs automatically in Phase 2 (`PHARMADOC_TIER1=1`). Use `--scan-mode` for scan-heavy batches; agent phases 3–5 are unchanged.
 
 ## License
 
